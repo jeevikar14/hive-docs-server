@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hive Global Documentation</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #0ea5e9;
+            --accent-dark: #0284c7;
+            --border: #dbe5ef;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: linear-gradient(180deg, #f0f7ff 0%, var(--bg) 60%);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 40px 20px 60px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+
+        .sub {
+            color: var(--muted);
+            margin-top: 10px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            margin-top: 24px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.05);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .row:last-child {
+            border-bottom: none;
+        }
+
+        .name {
+            font-weight: 600;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        a.button {
+            background: var(--accent);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 10px;
+            padding: 9px 13px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        a.button:hover {
+            background: var(--accent-dark);
+        }
+
+        .empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 24px;
+        }
+
+        .status {
+            color: var(--muted);
+            margin-top: 8px;
+            font-size: 0.92rem;
+        }
+
+        .versions {
+            margin-top: 6px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .chip {
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: #e0f2fe;
+            border: 1px solid #bae6fd;
+            color: #075985;
+            font-size: 0.78rem;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .button.secondary {
+            background: #334155;
+        }
+
+        .button.secondary:hover {
+            background: #1e293b;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Hive Global Docs</h1>
+        <p class="sub">Published API documentation for all services and versions.</p>
+
+        <section class="card">
+            <h2>Services</h2>
+            <div id="status" class="status">Fetching latest published services...</div>
+            <div id="services" class="empty">Loading services...</div>
+        </section>
+    </main>
+
+    <script>
+        async function loadServices()
+        {
+            const container = document.getElementById("services");
+            const status = document.getElementById("status");
+
+            try
+            {
+                const response = await fetch("/api/services");
+
+                if (!response.ok)
+                {
+                    throw new Error("Unable to fetch services.");
+                }
+
+                const payload = await response.json();
+                const services = payload.services || [];
+
+                if (services.length === 0)
+                {
+                    status.textContent = "No published services yet.";
+                    container.className = "empty";
+                    container.textContent = "No documentation has been published yet.";
+                    return;
+                }
+
+                status.textContent = `${services.length} service(s) available`;
+                container.className = "";
+                container.innerHTML = services.map((service) => {
+                    const latest = service.latestVersion || "-";
+                    const versionCount = Array.isArray(service.versions) ? service.versions.length : 0;
+                    const latestTime = service.latestPublishedAt
+                        ? new Date(service.latestPublishedAt).toLocaleString()
+                        : "Unknown";
+                    const versions = Array.isArray(service.versions) ? service.versions : [];
+                    const versionChips = versions.map((version) => `<span class="chip">${version}</span>`).join("");
+
+                    return `
+                        <div class="row">
+                            <div>
+                                <div class="name">${service.service}</div>
+                                <div class="muted">Latest: ${latest} | Versions: ${versionCount}</div>
+                                <div class="muted">Last published: ${latestTime}</div>
+                                <div class="versions">${versionChips}</div>
+                            </div>
+                            <div class="buttons">
+                                <a class="button" href="/docs/${service.service}" target="_blank" rel="noopener">Open Latest</a>
+                                <a class="button secondary" href="/api/services/${service.service}/versions" target="_blank" rel="noopener">View All Versions</a>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            }
+            catch (error)
+            {
+                status.textContent = "Unable to load services right now.";
+                container.className = "empty";
+                container.textContent = "Failed to load services.";
+            }
+        }
+
+        loadServices();
+    </script>
+</body>
+</html>
