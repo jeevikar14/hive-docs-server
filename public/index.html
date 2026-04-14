@@ -72,7 +72,8 @@
             font-size: 0.92rem;
         }
 
-        a.button {
+        a.button,
+        button.button {
             background: var(--accent);
             color: #fff;
             text-decoration: none;
@@ -80,10 +81,15 @@
             padding: 9px 13px;
             font-weight: 600;
             display: inline-block;
+            border: 0;
+            cursor: pointer;
+            transition: transform 120ms ease, opacity 120ms ease;
         }
 
-        a.button:hover {
+        a.button:hover,
+        button.button:hover {
             background: var(--accent-dark);
+            transform: translateY(-1px);
         }
 
         .empty {
@@ -127,6 +133,12 @@
         .button.secondary:hover {
             background: #1e293b;
         }
+
+        .auth-hint {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
     </style>
 </head>
 <body>
@@ -136,20 +148,310 @@
 
         <section class="card">
             <h2>Services</h2>
+            <div class="buttons" style="margin-bottom: 10px;">
+                <button class="button secondary" id="logoutBtn" style="display:none; border:0; cursor:pointer;">Logout</button>
+            </div>
             <div id="status" class="status">Fetching latest published services...</div>
             <div id="services" class="empty">Loading services...</div>
         </section>
     </main>
 
     <script>
-        async function loadServices()
+        let publicConfig = {
+            docsViewPermission: "DOCS_VIEW",
+            hiveLoginUrl: `${window.location.protocol}//${window.location.hostname}:49152/Client/Pages/HivePortalLoginPage.html`
+        };
+        let unauthorizedAlertShown = false;
+
+        function showUnauthorizedAlert()
         {
-            const container = document.getElementById("services");
+            if (unauthorizedAlertShown)
+            {
+                return;
+            }
+
+            unauthorizedAlertShown = true;
+            window.alert("Not authorized to view docs. Contact AMTG admin.");
+        }
+
+        async function loadPublicConfig()
+        {
+            try
+            {
+                const response = await fetch("/api/public-config");
+                if (!response.ok) return;
+                const payload = await response.json();
+                publicConfig = { ...publicConfig, ...payload };
+            }
+            catch (error)
+            {
+            }
+        }
+
+        async function buildHiveAuthHeaders()
+        {
+            const headers = {};
+
+            try
+            {
+                const sdk = await import("/hive-client.js");
+                const deviceId = await sdk.getDeviceId();
+
+                if (deviceId)
+                {
+                    headers["x-device-id"] = deviceId;
+                    document.cookie = `hiveDeviceId=${encodeURIComponent(deviceId)}; path=/; SameSite=Lax`;
+                }
+            }
+            catch (error)
+            {
+            }
+
+            const sessionToken = localStorage.getItem("sessionToken");
+            if (sessionToken)
+            {
+                headers["x-session-token"] = sessionToken;
+                document.cookie = `hiveSessionToken=${encodeURIComponent(sessionToken)}; path=/; SameSite=Lax`;
+            }
+
+            return headers;
+        }
+
+        async function hiveFetch(url, options = {})
+        {
+            const authHeaders = await buildHiveAuthHeaders();
+            const existingHeaders = options.headers || {};
+
+            return fetch(url, {
+                ...options,
+                credentials: "include",
+                headers: {
+                    ...existingHeaders,
+                    ...authHeaders
+                }
+            });
+        }
+
+        async function initializeHiveClientContext()
+        {
+            try
+            {
+                const sdk = await import("/hive-client.js");
+                await sdk.initClient({});
+
+                const deviceId = await sdk.getDeviceId();
+                if (deviceId)
+                {
+                    document.cookie = `hiveDeviceId=${encodeURIComponent(deviceId)}; path=/; SameSite=Lax`;
+                }
+            }
+            catch (error)
+            {
+            }
+        }
+
+        async function logoutHiveSession()
+        {
             const status = document.getElementById("status");
 
             try
             {
-                const response = await fetch("/api/services");
+                status.textContent = "Logging out...";
+                await hiveFetch("/Logout", { method: "POST" });
+            }
+            catch (error)
+            {
+            }
+
+            localStorage.removeItem("sessionToken");
+            document.cookie = "sessionToken=; Max-Age=0; path=/";
+            document.cookie = "hiveSessionToken=; Max-Age=0; path=/";
+
+            window.location.reload();
+        }
+
+        function openHiveLoginPopup(returnUrl)
+        {
+            const status = document.getElementById("status");
+            const popup = window.open(
+                "/popup-login.html",
+                "Hive Login",
+                "width=520,height=620"
+            );
+
+            if (!popup)
+            {
+                status.textContent = "Popup blocked. Allow popups and click Login again.";
+                return;
+            }
+
+            status.textContent = "Complete login in popup. Checking session...";
+
+            const onPopupMessage = async (event) =>
+            {
+                if (event.origin !== window.location.origin)
+                {
+                    return;
+                }
+
+                const message = event.data || {};
+
+                if (message.type === "hive-login-failed")
+                {
+                    status.textContent = message.message || "Invalid login credentials.";
+                    return;
+                }
+
+                if (message.type !== "hive-login-success")
+                {
+                    return;
+                }
+
+                if (message.sessionToken)
+                {
+                    localStorage.setItem("sessionToken", message.sessionToken);
+                }
+
+                window.removeEventListener("message", onPopupMessage);
+
+                try
+                {
+                    const authResponse = await hiveFetch("/api/auth/status");
+                    const auth = await authResponse.json();
+
+                    if (auth.loggedIn && auth.canViewDocs)
+                    {
+                        if (returnUrl)
+                        {
+                            window.location.href = returnUrl;
+                        }
+                        else
+                        {
+                            window.location.reload();
+                        }
+                        return;
+                    }
+
+                    if (auth.loggedIn && !auth.canViewDocs)
+                    {
+                        status.textContent = "Not authorized to view docs. Contact AMTG admin.";
+                        showUnauthorizedAlert();
+                        loadServices();
+                        return;
+                    }
+                }
+                catch (error)
+                {
+                }
+
+                loadServices();
+            };
+
+            window.addEventListener("message", onPopupMessage);
+
+            let checks = 0;
+            const maxChecks = 60;
+            const timer = setInterval(async () => {
+                checks += 1;
+
+                if (popup.closed)
+                {
+                    clearInterval(timer);
+                    window.removeEventListener("message", onPopupMessage);
+                    status.textContent = "Popup closed. Checking login status...";
+                    loadServices();
+                    return;
+                }
+
+                if (checks >= maxChecks)
+                {
+                    clearInterval(timer);
+                    status.textContent = "Login not detected yet. If popup login is complete, click Login to Hive again.";
+                }
+            }, 1200);
+        }
+
+        async function requestDocsViewPermission()
+        {
+            const status = document.getElementById("status");
+            const response = await hiveFetch("/api/permissions/request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    permissionName: publicConfig.docsViewPermission,
+                    reason: "Need to view API documentation."
+                })
+            });
+
+            const payload = await response.json();
+            status.textContent = payload.message || "Permission request submitted.";
+        }
+
+        async function loadServices()
+        {
+            const container = document.getElementById("services");
+            const status = document.getElementById("status");
+            const logoutBtn = document.getElementById("logoutBtn");
+
+            try
+            {
+                const authResponse = await hiveFetch("/api/auth/status");
+                const auth = authResponse.ok ? await authResponse.json() : { loggedIn: false, canViewDocs: false };
+
+                if (logoutBtn)
+                {
+                    logoutBtn.style.display = auth.loggedIn ? "inline-block" : "none";
+                }
+
+                if (!auth.loggedIn)
+                {
+                    status.innerHTML = "Login required to view services.";
+                    container.className = "empty";
+                    container.innerHTML = `
+                        <p>Stay on this page and login through popup.</p>
+                        <div class="buttons" style="justify-content:center;">
+                            <button class="button" id="loginBtn">Login to Hive</button>
+                        </div>
+                    `;
+
+                    const loginBtn = document.getElementById("loginBtn");
+                    if (loginBtn)
+                    {
+                        loginBtn.addEventListener("click", () => {
+                            status.textContent = "Waiting for login popup...";
+                            openHiveLoginPopup(window.location.href);
+                        });
+                    }
+
+                    return;
+                }
+
+                if (!auth.canViewDocs)
+                {
+                    status.textContent = "Not authorized to view docs. Contact AMTG admin.";
+                    container.className = "empty";
+                    container.innerHTML = `
+                        <p>Not authorized to view this documentation.</p>
+                        <div class="buttons" style="justify-content:center; margin-top:10px;">
+                            <button class="button" id="requestAccessBtn">Request Access</button>
+                        </div>
+                    `;
+
+                    const requestAccessBtn = document.getElementById("requestAccessBtn");
+                    if (requestAccessBtn)
+                    {
+                        requestAccessBtn.addEventListener("click", () => {
+                            requestDocsViewPermission().catch(() => {
+                                status.textContent = "Failed to submit permission request.";
+                            });
+                        });
+                    }
+
+                    showUnauthorizedAlert();
+                    return;
+                }
+
+                const response = await hiveFetch("/api/services");
 
                 if (!response.ok)
                 {
@@ -202,7 +504,21 @@
             }
         }
 
-        loadServices();
+        initializeHiveClientContext()
+            .then(loadPublicConfig)
+            .then(loadServices);
+
+        const logoutBtn = document.getElementById("logoutBtn");
+        if (logoutBtn)
+        {
+            logoutBtn.addEventListener("click", () => {
+                logoutHiveSession();
+            });
+        }
+
+        window.addEventListener("focus", () => {
+            loadServices();
+        });
     </script>
 </body>
 </html>
