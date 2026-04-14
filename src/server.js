@@ -11,7 +11,8 @@ const {
     saveConfiguration,
     handleHiveRequests,
     isLoggedIn,
-    isLoggedInWithPermission
+    isLoggedInWithPermission,
+    registerService
 } = require("@hivedev/hivesdk/server");
 
 const config = require("./config");
@@ -1046,7 +1047,7 @@ async function startServer()
 
     try
     {
-        await registerServiceWithHive();
+        await registerService();
     }
     catch (error)
     {
