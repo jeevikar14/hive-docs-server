@@ -18,12 +18,11 @@ npm install
 
 ## Running
 
-### Development Mode (with auto-reload)
+
 ```bash
 npm run dev
 ```
 
-### Production Mode
 ```bash
 npm start
 ```
