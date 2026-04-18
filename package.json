@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "Global documentation server for publishing and hosting static Swagger docs",
-  "main": "src/server.js",
+  "main": "src/Server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "node src/Server.js",
+    "dev": "node --watch src/Server.js"
   },
   "keywords": [
     "documentation",

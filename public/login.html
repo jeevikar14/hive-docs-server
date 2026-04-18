@@ -1,16 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hive Login</title>
+    <style>
+        body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 24px; display:flex; align-items:center; justify-content:center; height:100vh; }
+        .card { max-width:420px; width:100%; margin:0 auto; background:#fff; padding:18px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.06); text-align:center }
+        button{margin-top:14px;padding:10px 14px;background:#0ea5e9;color:#fff;border:0;border-radius:8px;cursor:pointer}
+        .muted{color:#475569;margin-top:8px;font-size:0.9rem}
+    </style>
 </head>
 <body>
-    
+    <div class="card">
+        <h2>Login to Hive</h2>
+        <p class="muted">This uses the Hive SDK. Click Login to open the portal login.</p>
+        <button id="loginBtn">Login to Hive</button>
+        <div id="status" class="muted" aria-live="polite" style="margin-top:8px"></div>
+    </div>
+
+    <script type="module">
+        import { initClient, login, getDeviceId } from '/hive-client.js';
+
+        const statusEl = document.getElementById('status');
+
+        initClient({}).catch((e) => console.error('initClient failed', e));
+
+        async function postLoginToServer(payload) {
+            const deviceId = await getDeviceId().catch(() => null);
+            const headers = { 'Content-Type': 'application/json' };
+            if (deviceId) headers['x-device-id'] = deviceId;
+
+            return fetch('/Login', {
+                method: 'POST',
+                credentials: 'include',
+                headers,
+                body: JSON.stringify(payload)
+            });
+        }
+
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            try {
+                statusEl.textContent = 'Opening Hive portal...';
+                await login();
+            } catch (err) {
+                console.error('login failed', err);
+                statusEl.textContent = 'Login failed — check console.';
+            }
+        });
+
+        // Receive credentials posted from the Hive portal popup
+        window.addEventListener('message', async (event) => {
+            if (!event.data || (typeof event.data !== 'object')) return;
+
+            const data = event.data;
+            if (!('userId' in data) && !('password' in data)) return;
+
+            statusEl.textContent = 'Signing in...';
+
+            try {
+                const resp = await postLoginToServer(data);
+                const sessionToken = resp.headers.get('x-session-token');
+
+                if (resp.ok) {
+                    if (sessionToken) {
+                        localStorage.setItem('sessionToken', sessionToken);
+                    }
+
+                    // Notify opener (the page that opened this popup)
+                    try {
+                        if (window.opener && !window.opener.closed) {
+                            window.opener.postMessage({ type: 'hive-login-success', sessionToken }, window.location.origin);
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    statusEl.textContent = 'Login successful. Closing...';
+                    setTimeout(() => window.close(), 600);
+                    return;
+                }
+
+                let body = null;
+                try { body = await resp.json(); } catch (e) { }
+                const message = (body && body.message) ? body.message : (resp.statusText || 'Login failed');
+
+                try {
+                    if (window.opener && !window.opener.closed) {
+                        window.opener.postMessage({ type: 'hive-login-failed', message }, window.location.origin);
+                    }
+                } catch (e) { /* ignore */ }
+
+                statusEl.textContent = 'Login failed: ' + message;
+            } catch (err) {
+                console.error('Network error during login', err);
+                statusEl.textContent = 'Network error';
+                try {
+                    if (window.opener && !window.opener.closed) {
+                        window.opener.postMessage({ type: 'hive-login-failed', message: 'Network error' }, window.location.origin);
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        });
+    </script>
 </body>
-<script type="module">
-    import { login } from "/hive-client.js"
-    
-    await login();
-</script>
 </html>

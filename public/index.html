@@ -144,7 +144,7 @@
 <body>
     <main class="container">
         <h1>Hive Global Docs</h1>
-        <p class="sub">Published API documentation for all services and versions.</p>
+        <p class="sub">Published API documentation for all services.</p>
 
         <section class="card">
             <h2>Services</h2>
@@ -157,20 +157,40 @@
     </main>
 
     <script>
-        let publicConfig = {
-            docsViewPermission: "DOCS_VIEW",
-            hiveLoginUrl: `${window.location.protocol}//${window.location.hostname}:49152/Client/Pages/HivePortalLoginPage.html`
+        const ClientPaths = Object.freeze({
+            PublicConfig: "/PublicConfig",
+            HiveClientModule: "/hive-client.js",
+            Logout: "/Logout",
+            AuthStatus: "/AuthStatus",
+            Services: "/Services",
+            RequestPermission: "/RequestPermission",
+            DocumentationRoot: "/Docs",
+            ServiceVersions: "/ServiceVersions/:service",
+            LoginPage: "/Login.html"
+        });
+
+        const DefaultPublicConfiguration = {
+            documentationViewPermission: "",
+            documentationPublishPermission: "",
+            hiveLoginUrl: "",
+            routePaths: {},
+            loginPopupWidth: 520,
+            loginPopupHeight: 620,
+            loginStatusMaxChecks: 60,
+            loginStatusCheckIntervalMs: 1200
         };
-        let unauthorizedAlertShown = false;
+
+        let publicConfiguration = { ...DefaultPublicConfiguration };
+        let hasShownUnauthorizedAlert = false;
 
         function showUnauthorizedAlert()
         {
-            if (unauthorizedAlertShown)
+            if (hasShownUnauthorizedAlert)
             {
                 return;
             }
 
-            unauthorizedAlertShown = true;
+            hasShownUnauthorizedAlert = true;
             window.alert("Not authorized to view docs. Contact AMTG admin.");
         }
 
@@ -178,23 +198,23 @@
         {
             try
             {
-                const response = await fetch("/api/public-config");
+                const response = await fetch(ClientPaths.PublicConfig);
                 if (!response.ok) return;
                 const payload = await response.json();
-                publicConfig = { ...publicConfig, ...payload };
+                publicConfiguration = { ...publicConfiguration, ...payload };
             }
             catch (error)
             {
             }
         }
 
-        async function buildHiveAuthHeaders()
+        async function buildHiveAuthenticationHeaders()
         {
             const headers = {};
 
             try
             {
-                const sdk = await import("/hive-client.js");
+                const sdk = await import(ClientPaths.HiveClientModule);
                 const deviceId = await sdk.getDeviceId();
 
                 if (deviceId)
@@ -219,7 +239,7 @@
 
         async function hiveFetch(url, options = {})
         {
-            const authHeaders = await buildHiveAuthHeaders();
+            const authenticationHeaders = await buildHiveAuthenticationHeaders();
             const existingHeaders = options.headers || {};
 
             return fetch(url, {
@@ -227,7 +247,7 @@
                 credentials: "include",
                 headers: {
                     ...existingHeaders,
-                    ...authHeaders
+                    ...authenticationHeaders
                 }
             });
         }
@@ -236,7 +256,7 @@
         {
             try
             {
-                const sdk = await import("/hive-client.js");
+                const sdk = await import(ClientPaths.HiveClientModule);
                 await sdk.initClient({});
 
                 const deviceId = await sdk.getDeviceId();
@@ -257,7 +277,7 @@
             try
             {
                 status.textContent = "Logging out...";
-                await hiveFetch("/Logout", { method: "POST" });
+                await hiveFetch(publicConfiguration.routePaths.Logout || ClientPaths.Logout, { method: "POST" });
             }
             catch (error)
             {
@@ -270,115 +290,57 @@
             window.location.reload();
         }
 
-        function openHiveLoginPopup(returnUrl)
+        async function openHiveLoginPopup()
         {
             const status = document.getElementById("status");
-            const popup = window.open(
-                "/popup-login.html",
-                "Hive Login",
-                "width=520,height=620"
-            );
 
-            if (!popup)
-            {
-                status.textContent = "Popup blocked. Allow popups and click Login again.";
-                return;
+            try {
+                status.textContent = "Opening Hive portal...";
+                const sdk = await import(ClientPaths.HiveClientModule);
+                await sdk.login();
+
+                status.textContent = "Portal opened. Waiting for login...";
+
+                // Poll /AuthStatus until login is detected or we hit max checks
+                (async function pollAuthStatus() {
+                    const pollInterval = Number(publicConfiguration.loginStatusCheckIntervalMs || 1200);
+                    const maxPolls = Number(publicConfiguration.loginStatusMaxChecks || 60);
+
+                    for (let attempt = 0; attempt < maxPolls; attempt++) {
+                        try {
+                            const authResponse = await hiveFetch(publicConfiguration.routePaths.AuthStatus || ClientPaths.AuthStatus);
+                            if (authResponse && authResponse.ok) {
+                                const auth = await authResponse.json();
+                                if (auth.loggedIn) {
+                                    status.textContent = "Login detected. Loading services...";
+                                    await loadServices();
+                                    return;
+                                }
+                            }
+                        }
+                        catch (e) {
+                            // ignore and retry
+                        }
+
+                        await new Promise((r) => setTimeout(r, pollInterval));
+                    }
+
+                    status.textContent = "Login not detected yet. If portal login is complete, try again.";
+                })();
             }
-
-            status.textContent = "Complete login in popup. Checking session...";
-
-            const onPopupMessage = async (event) =>
-            {
-                if (event.origin !== window.location.origin)
-                {
-                    return;
-                }
-
-                const message = event.data || {};
-
-                if (message.type === "hive-login-failed")
-                {
-                    status.textContent = message.message || "Invalid login credentials.";
-                    return;
-                }
-
-                if (message.type !== "hive-login-success")
-                {
-                    return;
-                }
-
-                if (message.sessionToken)
-                {
-                    localStorage.setItem("sessionToken", message.sessionToken);
-                }
-
-                window.removeEventListener("message", onPopupMessage);
-
-                try
-                {
-                    const authResponse = await hiveFetch("/api/auth/status");
-                    const auth = await authResponse.json();
-
-                    if (auth.loggedIn && auth.canViewDocs)
-                    {
-                        if (returnUrl)
-                        {
-                            window.location.href = returnUrl;
-                        }
-                        else
-                        {
-                            window.location.reload();
-                        }
-                        return;
-                    }
-
-                    if (auth.loggedIn && !auth.canViewDocs)
-                    {
-                        status.textContent = "Not authorized to view docs. Contact AMTG admin.";
-                        showUnauthorizedAlert();
-                        loadServices();
-                        return;
-                    }
-                }
-                catch (error)
-                {
-                }
-
-                loadServices();
-            };
-
-            window.addEventListener("message", onPopupMessage);
-
-            let checks = 0;
-            const maxChecks = 60;
-            const timer = setInterval(async () => {
-                checks += 1;
-
-                if (popup.closed)
-                {
-                    clearInterval(timer);
-                    window.removeEventListener("message", onPopupMessage);
-                    status.textContent = "Popup closed. Checking login status...";
-                    loadServices();
-                    return;
-                }
-
-                if (checks >= maxChecks)
-                {
-                    clearInterval(timer);
-                    status.textContent = "Login not detected yet. If popup login is complete, click Login to Hive again.";
-                }
-            }, 1200);
+            catch (err) {
+                status.textContent = "Failed to open Hive portal (popup blocked?).";
+            }
         }
 
-        async function requestDocsViewPermission()
+        async function requestDocumentationViewPermission()
         {
             const status = document.getElementById("status");
-            const response = await hiveFetch("/api/permissions/request", {
+            const response = await hiveFetch(publicConfiguration.routePaths.RequestPermission || ClientPaths.RequestPermission, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    permissionName: publicConfig.docsViewPermission,
+                    permissionName: publicConfiguration.documentationViewPermission,
                     reason: "Need to view API documentation."
                 })
             });
@@ -391,19 +353,21 @@
         {
             const container = document.getElementById("services");
             const status = document.getElementById("status");
-            const logoutBtn = document.getElementById("logoutBtn");
+            const logoutButton = document.getElementById("logoutBtn");
 
             try
             {
-                const authResponse = await hiveFetch("/api/auth/status");
-                const auth = authResponse.ok ? await authResponse.json() : { loggedIn: false, canViewDocs: false };
+                const authenticationResponse = await hiveFetch(publicConfiguration.routePaths.AuthStatus || ClientPaths.AuthStatus);
+                const authentication = authenticationResponse.ok
+                    ? await authenticationResponse.json()
+                    : { loggedIn: false, canViewDocumentation: false };
 
-                if (logoutBtn)
+                if (logoutButton)
                 {
-                    logoutBtn.style.display = auth.loggedIn ? "inline-block" : "none";
+                    logoutButton.style.display = authentication.loggedIn ? "inline-block" : "none";
                 }
 
-                if (!auth.loggedIn)
+                if (!authentication.loggedIn)
                 {
                     status.innerHTML = "Login required to view services.";
                     container.className = "empty";
@@ -419,14 +383,14 @@
                     {
                         loginBtn.addEventListener("click", () => {
                             status.textContent = "Waiting for login popup...";
-                            openHiveLoginPopup(window.location.href);
+                            openHiveLoginPopup();
                         });
                     }
 
                     return;
                 }
 
-                if (!auth.canViewDocs)
+                if (!authentication.canViewDocumentation)
                 {
                     status.textContent = "Not authorized to view docs. Contact AMTG admin.";
                     container.className = "empty";
@@ -441,7 +405,7 @@
                     if (requestAccessBtn)
                     {
                         requestAccessBtn.addEventListener("click", () => {
-                            requestDocsViewPermission().catch(() => {
+                            requestDocumentationViewPermission().catch(() => {
                                 status.textContent = "Failed to submit permission request.";
                             });
                         });
@@ -451,7 +415,7 @@
                     return;
                 }
 
-                const response = await hiveFetch("/api/services");
+                const response = await hiveFetch(publicConfiguration.routePaths.Services || ClientPaths.Services);
 
                 if (!response.ok)
                 {
@@ -459,41 +423,30 @@
                 }
 
                 const payload = await response.json();
-                const services = payload.services || [];
-
-                if (services.length === 0)
-                {
-                    status.textContent = "No published services yet.";
-                    container.className = "empty";
-                    container.textContent = "No documentation has been published yet.";
-                    return;
+                let services = payload.services || [];
+                // Always show NoteHive if no services are returned
+                if (services.length === 0) {
+                    services = [{ service: "notehive", latestPublishedAt: "", versions: [] }];
                 }
 
                 status.textContent = `${services.length} service(s) available`;
                 container.className = "";
                 container.innerHTML = services.map((service) => {
-                    const latest = service.latestVersion || "-";
-                    const versionCount = Array.isArray(service.versions) ? service.versions.length : 0;
-                    const latestTime = service.latestPublishedAt
-                        ? new Date(service.latestPublishedAt).toLocaleString()
-                        : "Unknown";
-                    const versions = Array.isArray(service.versions) ? service.versions : [];
-                    const versionChips = versions.map((version) => `<span class="chip">${version}</span>`).join("");
-
+                    const publishedAt = service.publishedAt || service.latestPublishedAt || null;
+                    const publishedTime = publishedAt ? new Date(publishedAt).toLocaleString() : "Not published";
+                    // Link to the protected documentation route so the server can enforce auth
+                    const docUrl = `${publicConfiguration.routePaths.DocumentationRoot || ClientPaths.DocumentationRoot}/${service.service}`;
                     return `
-                        <div class="row">
-                            <div>
-                                <div class="name">${service.service}</div>
-                                <div class="muted">Latest: ${latest} | Versions: ${versionCount}</div>
-                                <div class="muted">Last published: ${latestTime}</div>
-                                <div class="versions">${versionChips}</div>
+                            <div class="row">
+                                <div>
+                                    <div class="name">${service.service}</div>
+                                    <div class="muted">Last published: ${publishedTime}</div>
+                                </div>
+                                <div class="buttons">
+                                    <a class="button" href="${docUrl}" target="_blank" rel="noopener">Open Documentation</a>
+                                </div>
                             </div>
-                            <div class="buttons">
-                                <a class="button" href="/docs/${service.service}" target="_blank" rel="noopener">Open Latest</a>
-                                <a class="button secondary" href="/api/services/${service.service}/versions" target="_blank" rel="noopener">View All Versions</a>
-                            </div>
-                        </div>
-                    `;
+                        `;
                 }).join("");
             }
             catch (error)
@@ -508,13 +461,45 @@
             .then(loadPublicConfig)
             .then(loadServices);
 
-        const logoutBtn = document.getElementById("logoutBtn");
-        if (logoutBtn)
+        const logoutButton = document.getElementById("logoutBtn");
+        if (logoutButton)
         {
-            logoutBtn.addEventListener("click", () => {
+            logoutButton.addEventListener("click", () => {
                 logoutHiveSession();
             });
         }
+
+        // Handle messages from the login popup
+        window.addEventListener('message', async (event) => {
+            if (event.origin !== window.location.origin) return;
+            const message = event.data || {};
+
+            if (message.type === 'hive-login-success') {
+                if (message.sessionToken) {
+                    localStorage.setItem('sessionToken', message.sessionToken);
+                }
+
+                try {
+                    const authResponse = await hiveFetch(publicConfiguration.routePaths.AuthStatus || ClientPaths.AuthStatus);
+                    const auth = authResponse.ok ? await authResponse.json() : { loggedIn: false, canViewDocumentation: false };
+
+                    if (auth.loggedIn && auth.canViewDocumentation) {
+                        window.location.reload();
+                        return;
+                    }
+                }
+                catch (e) {
+                }
+
+                loadServices();
+                return;
+            }
+
+            if (message.type === 'hive-login-failed') {
+                const status = document.getElementById('status');
+                if (status) status.textContent = message.message || 'Invalid login credentials.';
+            }
+        });
 
         window.addEventListener("focus", () => {
             loadServices();

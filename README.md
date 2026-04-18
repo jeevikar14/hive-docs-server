@@ -27,32 +27,31 @@ npm run dev
 npm start
 ```
 
-Server runs on `http://localhost:4500` (configurable via `PORT` environment variable)
 
 ## API Endpoints
 
 ### Browse Documentation
 
-- `GET /api/services` - List all services with versions
-- `GET /api/services/:service/versions` - Get all versions for a service (returns HTML or JSON based on Accept header)
-- `GET /docs/:service` - View latest version docs
-- `GET /docs/:service/latest` - Redirect to latest version docs
-- `GET /docs/:service/:version` - View specific version docs with Swagger UI
+- `GET /Services` - List all services with versions
+- `GET /ServiceVersions/:service` - Get all versions for a service (returns HTML or JSON based on Accept header)
+- `GET /Docs/:service` - View latest version docs
+- `GET /Docs/:service/latest` - Redirect to latest version docs
+- `GET /Docs/:service/:version` - View specific version docs with Swagger UI
 
 ### Publish Documentation
 
-- `POST /api/publish` - Publish new documentation
+- `POST /Publish` - Publish new documentation
 
 
 ### Health Check
 
-- `GET /health` - Server health status
+- `GET /Health` - Server health status
 
 ## Configuration
 
 Set environment variables:
 
-- `PORT` - Server port (default: 4500)
+- `PORT` - Server port (default: 49167)
 - `DOCS_DATA_ROOT` - Path to store documentation (default: `./data`)
 
 
