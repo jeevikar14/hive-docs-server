@@ -16,16 +16,19 @@ function registerPublishRoutes(application, options)
     async function verifyRequestFromPortal(request, response, next)
     {
         console.log("Publish verify: incoming request from", request.ip, request.get && request.get('host'));
-        // record incoming attempt for debugging (persist minimal metadata)
-        try {
+        try
+        {
             const attemptsDir = documentationConfig.dataRoot;
             fs.mkdirSync(attemptsDir, { recursive: true });
             const attemptsFile = pathModule.join(attemptsDir, "publish_attempts.json");
             let attempts = [];
-            try {
+            try
+            {
                 const raw = fs.readFileSync(attemptsFile, "utf8");
                 attempts = JSON.parse(raw || "[]");
-            } catch (e) {
+            }
+            catch (e)
+            {
                 attempts = [];
             }
             attempts.push({
@@ -34,8 +37,16 @@ function registerPublishRoutes(application, options)
                 host: (request.get && request.get('host')) || "",
                 headers: Object.assign({}, request.headers)
             });
-            try { fs.writeFileSync(attemptsFile, JSON.stringify(attempts, null, 2), "utf8"); } catch (e) { /* ignore */ }
-        } catch (e) {
+            try
+            {
+                fs.writeFileSync(attemptsFile, JSON.stringify(attempts, null, 2), "utf8");
+            }
+            catch (e)
+            {
+            }
+        }
+        catch (e)
+        {
             console.log("Publish verify: failed to record attempt:", e && e.message);
         }
         try
@@ -159,20 +170,27 @@ function registerPublishRoutes(application, options)
         {
             console.log("Publish route hit from", request.ip, "host:", request.get && request.get('host'));
             console.log("Publish route headers:", request.headers);
-            // Debug: log request body and files
-            try {
+            try
+            {
                 console.log("Publish debug: request.body keys:", Object.keys(request.body || {}));
-                if (request.files) {
+                if (request.files)
+                {
                     console.log("Publish debug: request.files keys:", Object.keys(request.files));
-                    for (const [key, files] of Object.entries(request.files)) {
-                        for (const file of files) {
+                    for (const [key, files] of Object.entries(request.files))
+                    {
+                        for (const file of files)
+                        {
                             console.log(`Publish debug: file field='${key}', originalname='${file.originalname}', size=${file.size}`);
                         }
                     }
-                } else {
+                }
+                else
+                {
                     console.log("Publish debug: request.files is undefined or empty");
                 }
-            } catch (e) {
+            }
+            catch (e)
+            {
                 console.log("Publish debug: error logging request body/files", e && e.message);
             }
             try
@@ -192,13 +210,16 @@ function registerPublishRoutes(application, options)
                     html = request.body.documentationHtml || request.body.documentationHTML;
 
                     let publishResult;
-                    try {
+                    try
+                    {
                         publishResult = DocumentationStore.publishDocumentation(documentationConfig.dataRoot, {
                             service,
                             documentationHtmlBuffer: Buffer.from(String(html || ""), "utf8")
                         });
                         console.log("Publish debug: wrote documentation for service", service, "at", publishResult.documentationPath);
-                    } catch (err) {
+                    }
+                    catch (err)
+                    {
                         console.error("Publish debug: failed to write documentation for service", service, err && err.message);
                         response.status(httpStatusCodes.BadRequest).json({ message: err.message });
                         return;
@@ -209,20 +230,23 @@ function registerPublishRoutes(application, options)
 
                 const documentationFile = request.files?.document ? request.files.document[0] : null;
 
-                if (!documentationFile) {
+                if (!documentationFile)
+                {
                     response.status(httpStatusCodes.BadRequest).json({ message: "'document' file is required." });
                     return;
                 }
-                // Always use NoteHive as the service name, ignore file name and form fields
                 const forcedService = 'NoteHive';
                 let publishResult;
-                try {
+                try
+                {
                     publishResult = DocumentationStore.publishDocumentation(documentationConfig.dataRoot, {
                         service: forcedService,
                         documentationHtmlBuffer: documentationFile.buffer
                     });
                     console.log("Publish debug: wrote documentation for service", forcedService, "at", publishResult.documentationPath);
-                } catch (err) {
+                }
+                catch (err)
+                {
                     console.error("Publish debug: failed to write documentation for service", forcedService, err && err.message);
                     response.status(httpStatusCodes.BadRequest).json({ message: err.message });
                     return;

@@ -72,9 +72,10 @@ DocumentationStore.ensureDirectory(documentationConfig.dataRoot);
 application.use(express.json({ limit: ServerDefaults.JsonBodyLimit }));
 application.use(cookieParser());
 application.use(serverAccess.hydrateHiveHeaders);
-application.use(handleHiveRequests); // SDK middleware FIRST
+application.use(handleHiveRequests);
 
-application.get("/hive-client.js", (req, res) => {
+application.get("/hive-client.js", (req, res) =>
+{
     res.setHeader("Content-Type", "application/javascript");
     fs.createReadStream(path.resolve(__dirname, "../node_modules/@hivedev/hivesdk/hive-client.js")).pipe(res);
 });
@@ -115,7 +116,8 @@ registerPublishRoutes(application, {
     texts: Texts
 });
 
-application.use((request, response) => {
+application.use((request, response) =>
+{
     response.status(HttpStatusCodes.NotFound).json({ message: Texts.RouteNotFound });
 });
 

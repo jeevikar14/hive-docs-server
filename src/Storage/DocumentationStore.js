@@ -13,7 +13,6 @@ class DocumentationStore
         fs.mkdirSync(dirPath, { recursive: true });
     }
 
-    // Publish documentation for a service (versioning removed)
     static publishDocumentation(dataRoot, input)
     {
         const { serviceSlug, serviceDir, documentationFile } = DocumentationPaths.buildPaths(
@@ -56,7 +55,6 @@ class DocumentationStore
 
         for (const serviceEntry of serviceEntries)
         {
-            // Only include if documentation.html exists
             const docFile = path.join(dataRoot, serviceEntry.name, "documentation.html");
             if (fs.existsSync(docFile))
             {
