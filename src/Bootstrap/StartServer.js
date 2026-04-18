@@ -4,16 +4,21 @@ async function registerServiceUsingHiveSdk(registerService, hiveRegistrationStat
     hiveRegistrationState.attempts += 1;
     hiveRegistrationState.lastError = null;
 
-    // Force advertise DOCS_BASE_URL as localUrl if set
-    if (typeof registerService === 'function') {
+    if (typeof registerService === 'function')
+    {
         const documentationConfig = require("../DocumentationConfig");
         const localUrl = documentationConfig.documentationBaseUrl;
-        if (localUrl) {
+        if (localUrl)
+        {
             await registerService({ localUrl });
-        } else {
+        }
+        else
+        {
             await registerService();
         }
-    } else {
+    }
+    else
+    {
         await registerService();
     }
 
@@ -47,8 +52,6 @@ async function startServer(options)
 
     await new Promise((resolve) =>
     {
-        // Prefer the explicitly requested bind host. For local development
-        // default to 0.0.0.0 (all interfaces) rather than loopback.
         const requestedBind = process.env.DOCS_BIND_HOST;
         const fallbackBind = '0.0.0.0';
 
@@ -75,7 +78,6 @@ async function startServer(options)
                 }
 
                 console.error('Server listen error:', err && err.message);
-                // resolve to avoid hanging if server cannot start
                 resolve();
             });
         }
@@ -87,9 +89,6 @@ async function startServer(options)
     {
         await registerServiceUsingHiveSdk(registerService, hiveRegistrationState);
     }
-    // After registering via the SDK, attempt a safe override so the portal
-    // stores `local` as loopback (127.0.0.1) for this service. This avoids
-    // modifying SDK code while ensuring homepage links resolve to localhost.
     catch (error)
     {
         hiveRegistrationState.state = "failed";
@@ -117,7 +116,6 @@ async function startServer(options)
         }, 30000);
     }
 
-    // Use the SDK's `registerService` behavior — do not override portal registration here.
 }
 
 module.exports = startServer;

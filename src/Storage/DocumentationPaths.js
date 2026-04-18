@@ -4,7 +4,7 @@ const { StorageFieldNames } = require("../Constants/StorageConstants");
 
 class DocumentationPaths
 {
-    static buildPaths(dataRoot, service /* version ignored */)
+    static buildPaths(dataRoot, service)
     {
         const serviceSlug = String(service || "").trim().toLowerCase().replace(/[^a-z0-9\-]/g, "-");
         const serviceDir = path.join(dataRoot, serviceSlug);
