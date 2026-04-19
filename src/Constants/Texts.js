@@ -10,9 +10,7 @@
     PermissionRecorded: "Permission request recorded. Ask Hive admin to approve by assigning the required role in Hive.",
     DocumentationPublished: "Documentation published successfully.",
     ServiceNotFound: "Service not found.",
-    NoLatestVersion: "No latest version available for this service.",
-    InvalidPath: "Invalid path.",
-    DocumentationVersionNotFound: "Documentation version not found."
+    InvalidPath: "Invalid path."
 });
 
 module.exports = Texts;

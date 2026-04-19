@@ -197,17 +197,10 @@ function registerPublishRoutes(application, options)
             {
                 if (request.is && request.is("application/json") && request.body && (request.body.documentationHtml || request.body.documentationHTML))
                 {
-                    console.log("Publish route: JSON publish for service", request.body.serviceName || request.body.service);
-                    const service = request.body.serviceName || request.body.service;
+                    console.log("Publish route: JSON publish (using default service NoteHive)");
+                    const service = 'NoteHive';
 
-                    if (!service)
-                    {
-                        response.status(httpStatusCodes.BadRequest).json({ message: "JSON field 'serviceName' is required." });
-                        return;
-                    }
-
-                    const 
-                    html = request.body.documentationHtml || request.body.documentationHTML;
+                    const html = request.body.documentationHtml || request.body.documentationHTML;
 
                     let publishResult;
                     try

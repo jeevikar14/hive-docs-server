@@ -43,11 +43,8 @@ class HiveAuthenticationService
     isApiRequest(request)
     {
         const requestPath = String(request.path || "");
-        const serviceVersionsPathPrefix = this.routePaths.ServiceVersions.replace(":service", "");
-
         return requestPath === this.routePaths.AuthStatus
             || requestPath === this.routePaths.Services
-            || requestPath.startsWith(serviceVersionsPathPrefix)
             || requestPath === this.routePaths.Publish;
     }
 

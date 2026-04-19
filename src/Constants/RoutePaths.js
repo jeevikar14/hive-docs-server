@@ -6,10 +6,7 @@ const RoutePaths = Object.freeze({
     LoginPage: "/Login.html",
     
     Services: "/Services",
-    ServiceVersions: "/ServiceVersions/:service",
     DocumentationService: "/Docs/:service",
-    DocumentationLatest: "/Docs/:service/latest",
-    DocumentationVersion: "/Docs/:service/:version",
     DocumentationRoot: "/Docs",
     Publish: "/Publish"
 });

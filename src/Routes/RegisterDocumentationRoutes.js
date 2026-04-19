@@ -3,7 +3,6 @@ const express = require("express");
 
 const DocumentationFiles = require("../Constants/DocumentationFiles");
 const { StorageFieldNames } = require("../Constants/StorageConstants");
-const renderVersionsPage = require("../Views/VersionsPageRenderer");
 const DocumentationStore = require("../Storage/DocumentationStore");
 
 
@@ -51,36 +50,6 @@ function registerDocumentationRoutes(application, options)
     });
 
 
-    application.get(routePaths.ServiceVersions, ensureLoggedIn, async (request, response, next) =>
-    {
-        request.body.permissionName = "OPEN_DOCUMENTATION";
-        const permitted = await isLoggedInWithPermission(request, response, false);
-        if (!permitted)
-        {
-            response.status(httpStatusCodes.Forbidden).json({ message: texts.Unauthorized });
-            return;
-        }
-        try
-        {
-            const result = DocumentationStore.listServiceVersions(documentationConfig.dataRoot, request.params.service);
-            if (!result)
-            {
-                response.status(httpStatusCodes.NotFound).json({ message: texts.ServiceNotFound });
-                return;
-            }
-            const acceptHeader = request.get("Accept") || "";
-            if (acceptHeader.includes("text/html"))
-            {
-                response.type("html").send(renderVersionsPage(result));
-                return;
-            }
-            response.json(result);
-        }
-        catch (error)
-        {
-            response.status(httpStatusCodes.BadRequest).json({ message: error.message });
-        }
-    });
 
 
     application.get(routePaths.DocumentationService, ensureLoggedIn, async (request, response, next) =>
@@ -106,66 +75,6 @@ function registerDocumentationRoutes(application, options)
         }
     });
 
-
-    application.get(routePaths.DocumentationLatest, ensureLoggedIn, async (request, response, next) =>
-    {
-        request.body.permissionName = "OPEN_DOCUMENTATION";
-        const permitted = await isLoggedInWithPermission(request, response, false);
-        if (!permitted)
-        {
-            response.status(httpStatusCodes.Forbidden).json({ message: texts.Unauthorized });
-            return;
-        }
-        try
-        {
-            redirectToDocumentationRoot(request, response);
-        }
-        catch (error)
-        {
-            response.status(httpStatusCodes.BadRequest).send(error.message);
-        }
-    });
-
-
-    application.get(routePaths.DocumentationVersion, ensureLoggedIn, async (request, response, next) =>
-    {
-        request.body.permissionName = "OPEN_DOCUMENTATION";
-        const permitted = await isLoggedInWithPermission(request, response, false);
-        if (!permitted)
-        {
-            response.status(httpStatusCodes.Forbidden).json({ message: texts.Unauthorized });
-            return;
-        }
-        try
-        {
-            const serviceSlug = String(request.params.service || "").trim().toLowerCase().replace(/[^a-z0-9\-]/g, "-");
-            const documentationFilePath = path.join(documentationConfig.dataRoot, serviceSlug, DocumentationFiles.Html);
-            if (!path.isAbsolute(documentationFilePath))
-            {
-                response.status(httpStatusCodes.BadRequest).send(texts.InvalidPath);
-                return;
-            }
-            if (fs.existsSync(documentationFilePath))
-            {
-                try
-                {
-                    const raw = fs.readFileSync(documentationFilePath, "utf8");
-                    response.type("html").send(raw);
-                    return;
-                }
-                catch (error)
-                {
-                    response.status(httpStatusCodes.BadRequest).send(error.message);
-                    return;
-                }
-            }
-            response.status(httpStatusCodes.NotFound).send(texts.DocumentationVersionNotFound);
-        }
-        catch (error)
-        {
-            response.status(httpStatusCodes.BadRequest).send(error.message);
-        }
-    });
 
     application.use(routePaths.DocumentationRoot, ensureLoggedIn, async (request, response, next) =>
     {

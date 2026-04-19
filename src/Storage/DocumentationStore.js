@@ -73,44 +73,6 @@ class DocumentationStore
 
         return services.sort((left, right) => left.service.localeCompare(right.service));
     }
-
-    static listServiceVersions(dataRoot, service)
-    {
-        const serviceSlug = String(service || "").trim().toLowerCase().replace(/[^a-z0-9\-]/g, "-");
-        const serviceDir = path.join(dataRoot, serviceSlug);
-
-        if (!fs.existsSync(serviceDir))
-        {
-            return null;
-        }
-
-        const metadata = DocumentationMetadata.readServiceMetadata(dataRoot, serviceSlug);
-
-        return {
-            service: serviceSlug,
-            latestVersion: null,
-            versions: [],
-            versionTimestamps: {}
-        };
-    }
-
-    static getLatestDocumentationVersion(dataRoot, service)
-    {
-        const serviceSlug = String(service || "").trim().toLowerCase().replace(/[^a-z0-9\-]/g, "-");
-        const serviceDir = path.join(dataRoot, serviceSlug);
-
-        if (!fs.existsSync(serviceDir))
-        {
-            return null;
-        }
-
-        const metadata = DocumentationMetadata.readServiceMetadata(dataRoot, serviceSlug);
-
-        return {
-            service: serviceSlug,
-            latest: null
-        };
-    }
 }
 
 module.exports = DocumentationStore;
